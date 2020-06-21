@@ -1,52 +1,87 @@
-import { composeVev, next } from './middleware'
-import { callFn, isFn, pick } from './utils'
-import { VevConf, Vev } from './Vev'
+import { pick, isPlainObject, pReject, isFn, pResolve, merge } from './utils.ts'
+import { VevConf } from './index.ts'
+import { middleware } from './middleware.ts'
 
 const getParams = (params?: any) => {
   return new URLSearchParams(params).toString()
 }
+
 const getUrl = (config: VevConf) => {
-  if (/^\w+\:\/\//.test(config.url)) {
-    return config.url
-  }
-  const fetchUrl = (config.baseUrl || '') + (config.url || '')
-  const sp = /\?/.test(fetchUrl) ? '&' : '?'
-  const params = getParams(config.params)
+  const { url, baseUrl, params: configParams } = config
 
-  return fetchUrl + params ? sp + params : ''
+  const base = /^\w+\:\/\//.test(url) ? '' : baseUrl
+
+  const params = getParams(configParams)
+  const sp = params ? (/\?/.test(url) ? '&' : '?') : ''
+
+  return [base, url, sp, params].join('')
 }
 
-const getConfig = (config: VevConf) => {
+const getBody = (config: VevConf, [isPlainObject, isFormData]: boolean[]): VevConf['body'] => {
+  const { body, method } = config
+
+  return body && method && ['head', 'get'].includes(method)
+    ? null
+    : !isPlainObject
+    ? body
+    : isFormData
+    ? getParams(body)
+    : JSON.stringify(body)
+}
+
+const getHeaders = (
+  config: VevConf,
+  [isPlainObject, isFormData]: boolean[]
+): VevConf['headers'] => {
+  const { headers } = config
+
+  const jsonType = 'application/json;charset=utf-8'
+  const formType = 'application/x-www-form-urlencoded;charset=utf-8'
+
+  const contentType = isPlainObject ? { 'Content-Type': isFormData ? formType : jsonType } : null
+
+  return merge({}, contentType, headers)
+}
+
+const getSignal = (config: VevConf): AbortSignal | void => {
+  const { timeout, signal } = config
+  if (!timeout || timeout <= 0) return
+
+  const timeoutCtrl = new AbortController()
+
+  const timerIdx = setTimeout(() => abort(), timeout)
+  const abort = () => {
+    timeoutCtrl.abort()
+    clearTimeout(timerIdx)
+  }
+
+  signal?.aborted ? abort() : signal?.addEventListener('abort', abort)
+  return timeoutCtrl.signal
+}
+
+const getConfig = (config: VevConf): RequestInit => {
+  const computed = [isPlainObject(config.body), config.requsetType === 'formData']
+
+  const body = getBody(config, computed)
+  const headers = getHeaders(config, computed)
+  const signal = getSignal(config)
+
+  // without body, header, signal
   // prettier-ignore
-  const fetchConf = pick<VevConf, keyof RequestInit>(config, ['cache', 'credentials', 'headers', 'integrity', 'keepalive', 'method', 'mode', 'redirect', 'referrer', 'referrerPolicy', 'signal', 'window'])
+  const fetchConf: RequestInit = pick(config, ['cache', 'credentials', 'integrity', 'keepalive', 'method', 'mode', 'redirect', 'referrer', 'referrerPolicy'])
 
-  fetchConf.method = fetchConf.method || 'get'
-
-  if (!['head', 'get'].includes(fetchConf.method)) {
-    fetchConf.body = config.body
-  }
-
-  return fetchConf
+  return merge(fetchConf, signal && { signal }, body && { body }, headers && { headers })
 }
 
-export function request(this: Vev, config?: VevConf) {
-  return composeVev(...this.middleware())(config, vevRequest)
-}
+export const request: middleware = (config = {} as VevConf, next: VevConf['fetch']) => {
+  const fetchUrl = getUrl(config)
+  const fetchInit = getConfig(config)
 
-const uploadProgress = () => {}
+  return next([fetchUrl, fetchInit]).then((fetchRes: Response) => {
+    const resType = (config.responseType as Exclude<VevConf['responseType'], 'row'>) || 'json'
 
-const vevRequest = (config: VevConf) => {
-  const vFetch = config.fetch || self.fetch || fetch
+    const withFormat = isFn(fetchRes[resType]) ? fetchRes[resType]() : fetchRes
 
-  if (!fetch) throw 'fetch is unavailable'
-
-  return vFetch(config.url, config).then((fetchRes) => {
-    const resType = config.resType || 'json'
-    // prettier-ignore
-    const validType = ['arrayBuffer', 'blob', 'formData', 'json', 'text'].includes(resType)
-
-    const withFormat = !validType ? fetchRes : fetchRes[resType]()
-
-    return fetchRes.ok ? withFormat : Promise.reject(withFormat)
+    return fetchRes.ok ? withFormat : pResolve(withFormat).then(pReject)
   })
 }

@@ -1,55 +1,46 @@
-import { VevConf } from './Vev'
-import { isFn, callFn } from './utils'
+import { VevConf } from './index.ts'
+import { tap, pReject, pResolve, isFn } from './utils.ts'
+import { vevError } from './errorCode.ts'
 
-export type middlewareIn = (c: VevConf) => VevConf | Promise<VevConf>
-export type middlewareOut = <T, R>(c: R) => T | Promise<T>
-export type middlewareAll = <T>(c: VevConf, next: next) => Promise<T>
+export type middleware = <T>(c: VevConf, next: next) => Promise<T>
+export type middlewareConf = Partial<VevConf> | ((c: VevConf) => VevConf | Promise<VevConf>)
+export type middlewareRes = (c: any) => Promise<any>
 
-export type middleware =
-  | [middlewareIn]
-  | [middlewareIn | null, middlewareOut | null]
-  | middlewareAll
+type next = (...c: any[]) => Promise<any>
 
-export type next = (c: VevConf) => Promise<any>
+type composeVev = <T>(...mid: middleware[]) => (config?: VevConf, next?: next) => Promise<T>
 
-const transformer = (mid: middleware): middlewareAll => {
-  if (typeof mid === 'function') {
-    return mid
+type dispatch = (idx: number, arg: any) => Promise<any>
+
+export const composeVev: composeVev = (...mid) => {
+  if (!mid.length || !mid.every(isFn)) throw vevError(0)
+
+  return (config, finalCall) => {
+    let callIndex = 0
+
+    const dispatch: dispatch = (idx, arg) => {
+      if (arg === undefined) throw vevError(1)
+
+      const fn = idx === mid.length ? finalCall : mid[idx]
+
+      if (!fn) return pResolve(arg)
+
+      if (callIndex !== idx) throw vevError(2)
+      callIndex += 1
+
+      try {
+        return pResolve(fn(arg, dispatch.bind(null, idx + 1)))
+      } catch (err) {
+        return pReject(err)
+      }
+    }
+
+    return dispatch(0, config || null).then(
+      tap(() => {
+        if (callIndex !== mid.length + 1) {
+          throw vevError(2)
+        }
+      })
+    )
   }
-
-  if (Array.isArray(mid) && (isFn(mid[0]) || isFn(mid[1]))) {
-    return (conf: VevConf, next: next) => {
-      return Promise.resolve(callFn(mid[0], conf))
-        .then(next)
-        .then((resp) => callFn(mid[1], resp))
-    }
-  }
-
-  throw 'middleware must be function'
-}
-
-type composeVev = <T>(
-  ...mid: middleware[]
-) => (config: VevConf | undefined, next: next) => Promise<T>
-
-export const composeVev: composeVev = (...mid) => (config, next) => {
-  const dispatch = (idx: number, arg: VevConf): Promise<any> => {
-    if (arg === undefined) {
-      throw 'middleware must return config or pass to next'
-    }
-
-    const fn = idx === mid.length ? next : transformer(mid[idx])
-
-    if (!fn) {
-      return Promise.resolve(arg)
-    }
-
-    try {
-      return Promise.resolve(fn(arg, dispatch.bind(null, idx + 1)))
-    } catch (err) {
-      return Promise.reject(err)
-    }
-  }
-
-  return dispatch(0, config || ({} as VevConf))
 }
