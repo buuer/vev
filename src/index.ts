@@ -4,7 +4,7 @@ import { request } from './request.ts'
 import { vevError } from './errorCode.ts'
 
 //prettier-ignore
-type httpMethd = | 'get' | 'delete' | 'options' | 'connect' | 'head' | 'post' | 'put' | 'patch'
+type httpMethod = | 'get' | 'delete' | 'options' | 'connect' | 'head' | 'post' | 'put' | 'patch'
 
 //prettier-ignore
 type vevRequestWithBody = <T,B>(this:Vev, url: string, body?: B | VevConf['body'], config?: VevConf) => Promise<T>
@@ -20,7 +20,7 @@ type vevPatch<K extends keyof VevConf> = (
   s: VevConf[K] | ((vck: VevConf[K]) => VevConf[K])
 ) => Vev
 
-export interface Vev {
+export type Vev = {
   middleware: () => middleware[]
 
   version: () => string
@@ -49,7 +49,7 @@ export interface Vev {
 
 export interface VevConf extends Omit<RequestInit, 'body'> {
   body?: RequestInit['body'] | Record<string, any>
-  method?: httpMethd
+  method?: httpMethod
 
   url: string
   // @ts-ignore
@@ -81,12 +81,12 @@ const proto = (function createProto() {
       })
     }
 
-  const createMethod = (method: httpMethd): vevRequestWithoutBody =>
+  const createMethod = (method: httpMethod): vevRequestWithoutBody =>
     function (url, config) {
       return this.request({ ...config, url, method })
     }
 
-  const createMethodWithBody = (method: httpMethd): vevRequestWithBody =>
+  const createMethodWithBody = (method: httpMethod): vevRequestWithBody =>
     function (url, body, config) {
       return this.request({ ...config, url, body, method })
     }
