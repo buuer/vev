@@ -1,6 +1,7 @@
 import { pick, isPlainObject, pReject, isFn, pResolve, merge } from './utils.ts'
 import { VevConf } from './index.ts'
-import { middleware } from './middleware.ts'
+import { composeVev } from './middleware.ts'
+import { vevError } from './errorCode.ts'
 
 const getParams = (params?: any) => {
   return new URLSearchParams(params).toString()
@@ -9,10 +10,10 @@ const getParams = (params?: any) => {
 const getUrl = (config: VevConf) => {
   const { url, baseUrl, params: configParams } = config
 
-  const base = /^\w+\:\/\//.test(url) ? '' : baseUrl
+  const base = /^\w+\:\/\//.test(url as string) ? '' : baseUrl
 
   const params = getParams(configParams)
-  const sp = params ? (/\?/.test(url) ? '&' : '?') : ''
+  const sp = !params ? '' : /\?/.test(url as string) ? '&' : '?'
 
   return [base, url, sp, params].join('')
 }
@@ -20,7 +21,7 @@ const getUrl = (config: VevConf) => {
 const getBody = (config: VevConf, [isPlainObject, isFormData]: boolean[]): VevConf['body'] => {
   const { body, method } = config
 
-  return body && method && ['head', 'get'].includes(method)
+  return ['head', 'get'].includes(method || 'get')
     ? null
     : !isPlainObject
     ? body
@@ -38,29 +39,33 @@ const getHeaders = (
   const jsonType = 'application/json;charset=utf-8'
   const formType = 'application/x-www-form-urlencoded;charset=utf-8'
 
-  const contentType = isPlainObject ? { 'Content-Type': isFormData ? formType : jsonType } : null
-
-  return merge({}, contentType, headers)
+  return !isPlainObject
+    ? headers
+    : merge({ 'Content-Type': isFormData ? formType : jsonType }, headers)
 }
 
 const getSignal = (config: VevConf): AbortSignal | void => {
   const { timeout, signal } = config
   if (!timeout || timeout <= 0) return
+  if (signal && signal.aborted) return signal
 
   const timeoutCtrl = new AbortController()
 
-  const timerIdx = setTimeout(() => abort(), timeout)
   const abort = () => {
     timeoutCtrl.abort()
     clearTimeout(timerIdx)
+    signal && signal.removeEventListener('abort', abort)
   }
 
-  signal?.aborted ? abort() : signal?.addEventListener('abort', abort)
+  const timerIdx = setTimeout(abort, timeout)
+
+  signal && signal.addEventListener('abort', abort)
+
   return timeoutCtrl.signal
 }
 
 const getConfig = (config: VevConf): RequestInit => {
-  const computed = [isPlainObject(config.body), config.requsetType === 'formData']
+  const computed = [isPlainObject(config.body), config.requestType === 'formData']
 
   const body = getBody(config, computed)
   const headers = getHeaders(config, computed)
@@ -73,11 +78,14 @@ const getConfig = (config: VevConf): RequestInit => {
   return merge(fetchConf, signal && { signal }, body && { body }, headers && { headers })
 }
 
-export const request: middleware = (config = {} as VevConf, next) => {
+export const request: ReturnType<composeVev> = (config = {} as VevConf) => {
   const fetchUrl = getUrl(config)
   const fetchInit = getConfig(config)
+  const vFetch: typeof fetch = config.fetch || fetch || window.fetch
 
-  return next([fetchUrl, fetchInit]).then((fetchRes: Response) => {
+  if (!vFetch) throw vevError(3)
+
+  return vFetch(fetchUrl, fetchInit).then((fetchRes: Response) => {
     const resType = (config.responseType as Exclude<VevConf['responseType'], 'row'>) || 'json'
 
     const withFormat = isFn(fetchRes[resType]) ? fetchRes[resType]() : fetchRes
