@@ -46,9 +46,10 @@ export const deepMerge = (origin: any, overrides: any) => {
 
 export const memoryCall = (() => {
   const memoryMap = new WeakMap()
-  return (key: any, fn: any, ...arg: any[]) => {
+
+  return (key: any, fn: any) => {
     if (!memoryMap.has(key)) {
-      memoryMap.set(key, callFn(fn, ...arg))
+      memoryMap.set(key, callFn(fn))
     }
 
     return memoryMap.get(key)

@@ -116,7 +116,7 @@ const proto = (function createProto() {
       const vFetch = config?.fetch || fetch || window.fetch
       if (!vFetch) throw vevError(3)
 
-      const composetMid = memoryCall(this, composeVev, ...this.middleware(), request)
+      const composetMid = memoryCall(this, () => composeVev(...this.middleware(), request))
 
       return composetMid(config, ([url, init]: Parameters<VevConf['fetch']>) => vFetch(url, init))
     },
