@@ -49,9 +49,9 @@ Deno.test('vev mapConfig', () => {
   v2.request(mapConfig({ headers: { a: 3, b: '2' }, url: '' }))
   v3.request(mapConfig({ url: '123', headers: { a: 3, b: 2, d: '4' } }))
   v4.request(mapConfig({ url: '123/a?name=name', headers: { a: 3, b: 2, d: '4' } }))
-  v4.params({ name: 'newName' }).request(
-    mapConfig({ url: '123/a?name=newName', headers: { a: 3, b: 2, d: '4' } })
-  )
+  return v4
+    .params({ name: 'newName' })
+    .request(mapConfig({ url: '123/a?name=newName', headers: { a: 3, b: 2, d: '4' } }))
 })
 
 Deno.test('vev mapResponse', () => {
@@ -64,7 +64,8 @@ Deno.test('vev mapResponse', () => {
     assertEquals(res, { headers: { a: 1, b: 2 }, a: 3 })
   })
 
-  v1.mapConfig({ responseType: 'row' })
+  return v1
+    .mapConfig({ responseType: 'row' })
     .request(createFetch())
     .then((res: any) => assert(res.a === 3 && res.ok))
 })
@@ -79,7 +80,7 @@ Deno.test('vev request method', () => {
     }),
   })
 
-  v1.post(
+  return v1.post(
     '/dsa',
     { body: true },
     createFetch((conf: any) => {

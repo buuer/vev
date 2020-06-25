@@ -21,7 +21,7 @@ Deno.test('request |  baseUrl', () => {
     createFetch((url, init) => assertStrictEquals(url, 'fetch.data'))
   )
 
-  request(
+  return request(
     { url: 'fetch.data', baseUrl: '/basePath/' },
     createFetch((url, init) => assertStrictEquals(url, '/basePath/fetch.data'))
   )
@@ -59,7 +59,7 @@ Deno.test('request | bodyFormat', () => {
     })
   )
 
-  request(
+  return request(
     { url: '/', body: 'a=1&b=2', headers: { 'Content-Type': 'application/hahah' } },
     createFetch((url, init) => {
       assertStrictEquals(init?.body, 'a=1&b=2')
@@ -81,7 +81,7 @@ Deno.test('request | response', () => {
     .then((err: any) => err.json())
     .then((err) => assertEquals(err, 'error'))
 
-  request(
+  return request(
     { url: '.' },
     createFetch(() => ({ ok: false, data: 'error' }))
   )
@@ -98,7 +98,6 @@ Deno.test('request | timeout', () => {
     createFetch((url, init) => {
       if (!init?.signal) return assert(false)
       const dateStart = Date.now()
-      console.log(init.signal)
 
       return signalAbout(init.signal).then(
         () => {
