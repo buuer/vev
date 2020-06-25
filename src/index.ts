@@ -118,7 +118,7 @@ const proto = (function createProto() {
 
       const composetMid = memoryCall(this, () => composeVev(...this.middleware(), request))
 
-      return composetMid(config, ([url, init]: Parameters<VevConf['fetch']>) => vFetch(url, init))
+      return composetMid(config, (fetchArg: Parameters<VevConf['fetch']>) => vFetch(...fetchArg))
     },
 
     get: createMethod('get'),

@@ -73,7 +73,7 @@ const getConfig = (config: VevConf): RequestInit => {
   return merge(fetchConf, signal && { signal }, body && { body }, headers && { headers })
 }
 
-export const request: middleware = (config = {} as VevConf, next: VevConf['fetch']) => {
+export const request: middleware = (config = {} as VevConf, next) => {
   const fetchUrl = getUrl(config)
   const fetchInit = getConfig(config)
 
