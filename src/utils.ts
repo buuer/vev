@@ -2,6 +2,7 @@ export const merge = Object.assign
 export const objectCreate = Object.create
 const objectKeys = Object.keys
 const objectProto = Object.prototype
+const objectHop = objectProto.hasOwnProperty
 
 const isArr = Array.isArray
 export const concat = (...arr: any[]) => [].concat(...arr)
@@ -31,25 +32,23 @@ export const tap = (fn: any) => (arg: any) => (fn(arg), arg)
 
 const getVal = (obj: any, isObj: boolean) => (isObj ? deepMerge({}, obj) : obj)
 
-export const deepMerge = (origin: any, overrides: any): any => {
-  return concat(objectKeys(overrides), objectKeys(origin)).reduce((o, key) => {
+export const deepMerge = (origin: any, overrides: any): any =>
+  concat(objectKeys(overrides), objectKeys(origin)).reduce((o, key) => {
     const overridesVal = overrides[key]
     const originVal = origin[key]
     const isOverridesObj = isPlainObject(overridesVal)
     const isOriginObj = isPlainObject(originVal)
 
-    o[key] =
-      isOriginObj && isOverridesObj
-        ? deepMerge(originVal, overridesVal)
-        : isArr(originVal) && isArr(overridesVal)
-        ? concat(originVal, overridesVal)
-        : isUndefined(overridesVal)
-        ? getVal(originVal, isOriginObj)
-        : getVal(overridesVal, isOverridesObj)
+    o[key] = !objectHop.call(overrides, key)
+      ? getVal(originVal, isOriginObj)
+      : isOriginObj && isOverridesObj
+      ? deepMerge(originVal, overridesVal)
+      : isArr(originVal) && isArr(overridesVal)
+      ? concat(originVal, overridesVal)
+      : getVal(overridesVal, isOverridesObj)
 
     return o
   }, {} as any)
-}
 
 export const memoryCall = (() => {
   const memoryMap = new WeakMap()
