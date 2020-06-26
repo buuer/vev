@@ -4,28 +4,41 @@
 
 ---
 
-## start
+## Start
+
+### Browser
 
 ```html
-<html>
-  <head>
-    <script scr="./vev.js" type="module" />
-  </head>
-  <body>
-    <script type="module">
-      import { vev } from './vev.min.js
-      vev.get('/')
-    </script>
-  </body>
-</html>
+<script scr="https://unpkg.com/vev@0.0.4/dist/index.js" type="module"></script>
+...
+<script type="module">
+  import { vev } from 'https://unpkg.com/vev@0.0.4/dist/index.js'
+  vev.get('/')
+</script>
 ```
 
-## usage
+### Node
+
+```bash
+npm i vev
+```
 
 ```js
-// import { vev } form 'vev'
-// const { vev } = require('vev/dist/index.common.js')
+// esm
+import { vev } from 'vev'
+// cjs
+const { vev } = require('vev/dist/index.common.js')
+```
 
+### Deno
+
+```ts
+import { vev } from 'https://denopkg.com/buuer/vev@0.0.4/src/index.ts'
+```
+
+## Usage
+
+```js
 vev.get('/user')
 vev.get('/user?id=3')
 vev.get('/user', { params: { id: 3 } })
@@ -45,7 +58,7 @@ vev.put(
   }
 )
 
-vev.requset({
+vev.request({
   method: 'post',
   body: { name: 'name', id: '1' },
 })
@@ -54,22 +67,22 @@ const vevUser = vev.mapConfig({ baseUrl: '/user', params: { pageNum: 1 } })
 vevUser.get('/post', { params: { id: 1 } }) // GET /user/post?id=1&pageNum=1
 
 const vevNewUser = vevUser.mapConfig({ baseUrl: '/newUser', params: { pageNum: 0 } })
-vevNewUser.requset({ parmas: { id: 2 } }) // GET /newUser?id=2&params=0
+vevNewUser.request({ parmas: { id: 2 } }) // GET /newUser?id=2&params=0
 
 // import fetch as fetchpolyfill from 'node-fetch'
 import { fetch as fetchPolyfill } from 'whatwg-fetch'
 
 const vevPolyfill = vev.mapConfig({ fetch: fetchPolyfill })
-vevPolufill.get('/post')
+vevPolyfill.get('/post')
 
 const vevPolyfillNewUSer = vevPolyfill.map(...vevNewUser.middleware())
 ```
 
 ---
 
-## api
+## Api
 
-### vevConfig
+### VevConfig
 
 ```ts
 interface VevConf extends RequestInit {
@@ -99,7 +112,7 @@ interface VevConf extends RequestInit {
 }
 ```
 
-### vev
+### Vev
 
 ```ts
 type middleware = (conf: VevConf | undefined, next) => Promise<any>
@@ -139,7 +152,7 @@ export type Vev<R = resWithBody> = {
 
 ---
 
-## middleware
+## Middleware example
 
 - withLoding
 
@@ -189,7 +202,7 @@ const vevWithAuth = vevWithToken.map(withLoading).mapResponse(gotoLogin)
 
 ---
 
-## build
+## Build
 
 ```bash
 esbuild --bundle ./src/index.ts --target=es6 --minify --format=esm --outfile=./dist/index.js
@@ -199,8 +212,3 @@ esbuild --bundle ./src/index.ts --target=es6 --minify --format=cjs --outfile=./d
 Deno test ./test.ts
 
 ```
-
-### about vev
-
-Fetch just like a shuttle, switch between client and server.  
-vev in Norwegian means loom, it's sort and cute :p
