@@ -1,6 +1,6 @@
 import { VevConf } from './index.ts'
-import { tap, pReject, pResolve, isFn } from './utils.ts'
-import { vevError } from './errorCode.ts'
+import { tap, pReject, pResolve, isFn, isUndefined } from './utils.ts'
+import { vevAssert } from './errorCode.ts'
 
 export type middleware = <T>(c: VevConf | undefined, next: next) => Promise<T>
 export type middlewareConf = Partial<VevConf> | ((c: VevConf) => VevConf | Promise<VevConf>)
@@ -8,13 +8,12 @@ export type middlewareRes = (c: any) => Promise<any>
 
 type next = (...c: any[]) => Promise<any>
 
-export type composeVev = (mid: middleware[]) => <T>(c?: VevConf, next?: next) => Promise<T>
+export type composeVev = (mid: middleware[]) => (c?: VevConf, next?: next) => Promise<any>
 
-type dispatch = <T>(idx: number, arg: any) => Promise<T>
+type dispatch = (idx: number, arg: any) => Promise<any>
 
-export const middlewareCheck = (midList: middleware[]) => {
-  if (midList.length && !midList.every(isFn)) throw vevError(0)
-}
+export const middlewareCheck = (midList: middleware[]) =>
+  vevAssert(!midList.length || midList.every(isFn), 0)
 
 export const composeVev: composeVev = (mid) => {
   middlewareCheck(mid)
@@ -23,14 +22,14 @@ export const composeVev: composeVev = (mid) => {
     let callIndex = -1
 
     const dispatch: dispatch = (idx, arg) => {
-      if (arg === undefined) throw vevError(1)
+      vevAssert(!isUndefined(arg), 1)
 
       const fn = idx === mid.length ? finalCall : mid[idx]
 
       if (!fn) return pResolve(arg)
 
       callIndex += 1
-      if (callIndex !== idx) throw vevError(2)
+      vevAssert(callIndex === idx, 2)
 
       try {
         return pResolve(fn(arg, dispatch.bind(null, idx + 1)))
@@ -39,12 +38,6 @@ export const composeVev: composeVev = (mid) => {
       }
     }
 
-    return dispatch(0, config || null).then(
-      tap(() => {
-        if (callIndex !== mid.length) {
-          throw vevError(2)
-        }
-      })
-    )
+    return dispatch(0, config || null).then(tap(() => vevAssert(callIndex === mid.length, 2)))
   }
 }

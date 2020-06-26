@@ -1,4 +1,14 @@
-import { isFn, memoryCall, callFn, deepMerge, merge, pResolve, objectCreate } from './utils.ts'
+import {
+  isFn,
+  memoryCall,
+  callFn,
+  deepMerge,
+  merge,
+  pResolve,
+  objectCreate,
+  concat,
+} from './utils.ts'
+
 import {
   middleware,
   composeVev,
@@ -7,7 +17,7 @@ import {
   middlewareCheck,
 } from './middleware.ts'
 import { request } from './request.ts'
-import { vevError } from './errorCode.ts'
+import { vevAssert } from './errorCode.ts'
 
 //prettier-ignore
 type httpMethod = | 'get' | 'delete' | 'options' | 'connect' | 'head' | 'post' | 'put' | 'patch'
@@ -65,19 +75,17 @@ const proto = (function createProto() {
   const configToMid: configToMid = (config) => (conf, next) =>
     pResolve(isFn(config) ? callFn(config, conf) : deepMerge(conf, config)).then(next)
 
-  const resToMid: resToMid = (resFormat) => {
-    if (!isFn(resFormat)) throw 'resFormat is not a function'
-    return (conf, next) => next(conf).then(resFormat)
-  }
+  const resToMid: resToMid = (resFormat) => (conf, next) =>
+    next(conf).then(resFormat.bind(null, null), resFormat)
 
   const createMethod = (method: httpMethod): vevRequestWithoutBody =>
     function (url, config) {
-      return this.request({ ...config, url, method })
+      return this.request(merge({}, config, { url, method }))
     }
 
   const createMethodWithBody = (method: httpMethod): Record<string, vevRequestWithBody> => ({
     [method]: function (url, body, config) {
-      return this.request({ ...config, url, body, method })
+      return this.request(merge({}, config, { url, body, method }))
     },
   })
 
@@ -88,7 +96,7 @@ const proto = (function createProto() {
 
       // configuration
       map: function (...mid) {
-        return CreateVev([...this.middleware(), ...mid])
+        return CreateVev(concat(this.middleware(), mid))
       },
 
       mapConfig: function (config) {
@@ -96,6 +104,7 @@ const proto = (function createProto() {
       },
 
       mapRes: function (resFormat) {
+        vevAssert(isFn(resFormat), 4)
         return this.map(resToMid(resFormat))
       },
 
