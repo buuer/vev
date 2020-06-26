@@ -1,113 +1,177 @@
 import { request } from '../src/request.ts'
-import { assertEquals, assertStrictEquals, assert } from 'https://deno.land/std/testing/asserts.ts'
+import { assertEquals, assertStrictEquals, assert, createFetch } from './_test.dep.ts'
 
-const createFetch: (
-  fn: (u: string, init?: RequestInit) => any
-) => (url: string, init?: RequestInit) => Promise<any> = (fn) => ([url, init]: any) => {
-  return Promise.resolve(fn(url, init)).then((res = null) => ({
-    ok: res?.ok ?? true,
-    json: () => Promise.resolve(res?.data ?? 'json'),
-  }))
-}
+Deno.test('request | url', () => {
+  return request({
+    url: 'fetch.data',
+    fetch: createFetch((url, init) => assertStrictEquals(url, 'fetch.data')),
+  })
+})
 
-Deno.test('request |  baseUrl', () => {
-  request(
-    { url: 'http://fetch.data', baseUrl: '/basePath/' },
-    createFetch((url, init) => assertStrictEquals(url, 'http://fetch.data'))
-  )
+Deno.test('request | baseUrl', () => {
+  return request({
+    url: 'fetch.data',
+    baseUrl: '/basePath/',
+    fetch: createFetch((url, init) => assertStrictEquals(url, '/basePath/fetch.data')),
+  })
+})
 
-  request(
-    { url: 'fetch.data' },
-    createFetch((url, init) => assertStrictEquals(url, 'fetch.data'))
-  )
-
-  return request(
-    { url: 'fetch.data', baseUrl: '/basePath/' },
-    createFetch((url, init) => assertStrictEquals(url, '/basePath/fetch.data'))
-  )
+Deno.test('request | baseUrl and absolute url', () => {
+  return request({
+    url: 'http://fetch.data',
+    baseUrl: '/basePath/',
+    fetch: createFetch((url, init) => assertStrictEquals(url, 'http://fetch.data')),
+  })
 })
 
 Deno.test('request | bodyFormat', () => {
-  request(
-    { url: '/', body: 'a=1&b=2' },
-    createFetch((url, init) => assertStrictEquals(init?.body, 'a=1&b=2'))
-  )
+  return request({
+    url: '/',
+    method: 'post',
+    body: 'a=1&b=2',
+    fetch: createFetch((url, init) => {
+      assertStrictEquals(init?.body, 'a=1&b=2')
+    }),
+  })
+})
 
-  request(
-    { url: '/', body: { a: 1, b: 2 } },
-    createFetch((url, init) => {
+Deno.test('request | bodyFormat method GET without body', () => {
+  return request({
+    url: '/',
+    body: 'a=1&b=2',
+    fetch: createFetch((url, init) => {
+      assertStrictEquals(init?.body, undefined)
+    }),
+  })
+})
+
+Deno.test('request | bodyFormat json', () => {
+  return request({
+    url: '/',
+    method: 'post',
+    body: { a: 1, b: 2 },
+    fetch: createFetch((url, init) => {
       assertStrictEquals(init?.body, JSON.stringify({ a: 1, b: 2 }))
       assertEquals(init?.headers, { 'Content-Type': 'application/json;charset=utf-8' })
-    })
-  )
+    }),
+  })
+})
 
-  request(
-    { url: '/', body: { a: 1, b: 2 }, headers: { 'Content-Type': 'json' } },
-    createFetch((url, init) => {
+Deno.test('request | bodyFormat custom headers', () => {
+  return request({
+    url: '/',
+    method: 'post',
+    body: { a: 1, b: 2 },
+    headers: { 'Content-Type': 'json' },
+    fetch: createFetch((url, init) => {
       assertStrictEquals(init?.body, JSON.stringify({ a: 1, b: 2 }))
       assertEquals(init?.headers, { 'Content-Type': 'json' })
-    })
-  )
+    }),
+  })
+})
 
-  request(
-    { url: '/', body: { a: 1, b: 2 }, requsetType: 'formData' },
-    createFetch((url, init) => {
+Deno.test('request | bodyFormat formData', () => {
+  return request({
+    url: '/',
+    body: { a: 1, b: 2 },
+    method: 'post',
+    requestType: 'formData',
+    fetch: createFetch((url, init) => {
       assertStrictEquals(init?.body, 'a=1&b=2')
       assertEquals(init?.headers, {
         'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
       })
-    })
-  )
+    }),
+  })
+})
 
-  return request(
-    { url: '/', body: 'a=1&b=2', headers: { 'Content-Type': 'application/hahah' } },
-    createFetch((url, init) => {
+Deno.test('request | bodyFormat custom headers', () => {
+  return request({
+    url: '/',
+    body: 'a=1&b=2',
+    method: 'post',
+    headers: { 'Content-Type': 'application/hahah' },
+    fetch: createFetch((url, init) => {
       assertStrictEquals(init?.body, 'a=1&b=2')
       assertEquals(init?.headers, { 'Content-Type': 'application/hahah' })
-    })
+    }),
+  })
+})
+
+Deno.test('request | response body', () => {
+  return request({ url: '.', fetch: createFetch((url, init) => ({ body: 'a' })) }).then((res) =>
+    assertStrictEquals(res.body, 'a')
   )
 })
 
-Deno.test('request | response', () => {
-  request(
-    { url: '.' },
-    createFetch((url, init) => ({ data: 'a' }))
-  ).then((res) => assertStrictEquals(res, 'a'))
-
-  request(
-    { url: '.', responseType: 'row' },
-    createFetch(() => ({ ok: true, data: 'error' }))
-  )
-    .then((err: any) => err.json())
+Deno.test('request | response row', () => {
+  return request({
+    url: '.',
+    responseType: 'row',
+    fetch: createFetch(() => ({ body: 'error' })),
+  })
+    .then((err: any) => err.response.json())
     .then((err) => assertEquals(err, 'error'))
-
-  return request(
-    { url: '.' },
-    createFetch(() => ({ ok: false, data: 'error' }))
-  )
-    .then(() => assert(''))
-    .catch((err) => assertEquals(err, 'error'))
 })
+
+Deno.test('request | response error status: response.ok === false', () => {
+  return request({ url: '.', fetch: createFetch(() => ({ ok: false, body: 'error' })) })
+    .then(() => assert(false))
+    .catch((err) => assertEquals(err.body, 'error'))
+})
+
+const signalAbout = (signal: AbortSignal) =>
+  new Promise((resolve) => signal.addEventListener('abort', resolve))
 
 Deno.test('request | timeout', () => {
-  const signalAbout = (signal: AbortSignal) =>
-    new Promise((resolve) => signal.addEventListener('abort', resolve))
-
-  return request(
-    { url: '', timeout: 300 },
-    createFetch((url, init) => {
+  return request({
+    url: '',
+    timeout: 100,
+    fetch: createFetch((url, init) => {
       if (!init?.signal) return assert(false)
-      const dateStart = Date.now()
+      const startTime = Date.now()
 
       return signalAbout(init.signal).then(
         () => {
-          const time = Date.now() - dateStart
-          assert(time < 330, 'timeout > 330')
-          assert(time > 270, 'timeout < 270')
-          assert('about')
+          const time = Date.now() - startTime
+          assert(time <= 120, 'timeout > 120, time: ' + time)
+          assert(time >= 100, 'timeout < 100, time: ' + time)
         },
         (err) => assert(false, err)
       )
-    })
-  )
+    }),
+  })
+})
+
+Deno.test('request | signal abouted', () => {
+  const ctrl = new AbortController()
+  const signal = ctrl.signal
+  ctrl.abort()
+
+  return request({
+    url: '',
+    signal,
+    fetch: createFetch((url, init) => assertStrictEquals(init?.signal, signal)),
+  })
+})
+
+Deno.test('request | time with signal ', () => {
+  const ctrl = new AbortController()
+  const signal = ctrl.signal
+  setTimeout(() => ctrl.abort(), 50)
+  const startTime = Date.now()
+
+  return request({
+    url: '',
+    signal,
+    timeout: 100,
+    fetch: createFetch((url, init) => {
+      assert(init?.signal, 'without signal')
+      return signalAbout(init?.signal).then(() => {
+        const time = Date.now() - startTime
+        assert(time <= 60, ' time > 60, time: ' + time)
+        assert(time >= 50, ' time < 50, time: ' + time)
+      })
+    }),
+  })
 })
