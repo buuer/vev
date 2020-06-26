@@ -74,7 +74,7 @@ const proto = (function createProto() {
   return merge(
     objectCreate(null),
     {
-      version: () => '0.0.2',
+      version: () => '0.0.4',
 
       // configuration
       map: function (...mid) {

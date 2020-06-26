@@ -1,6 +1,6 @@
 {
   "name": "vev",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "tiny HTTP request lib base on Fetch AP",
   "main": "dist/index.js",
   "keywords": [
