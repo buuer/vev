@@ -47,7 +47,7 @@ const getHeaders = (
 const getSignal = (config: VevConf): AbortSignal | void => {
   const { timeout, signal } = config
   if (signal && signal.aborted) return signal
-  if (!timeout || timeout <= 0) return
+  if (!timeout) return
 
   const timeoutCtrl = new AbortController()
 

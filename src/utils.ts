@@ -13,14 +13,6 @@ export const isPlainObject = (obj: any) => objectProto.toString.call(obj) === '[
 export const isFn = (fn: any) => typeof fn === 'function'
 export const isUndefined = (u: any) => u === undefined
 
-export const callFn = (fn: any, ...arg: any[]) => {
-  try {
-    return isFn(fn) ? fn.call(null, ...arg) : arg[0]
-  } catch (error) {
-    return arg
-  }
-}
-
 export const pick = (obj: any, arr: string[]) => {
   return arr.reduce((o, k) => {
     !isUndefined(obj[k]) && (o[k] = obj[k])
