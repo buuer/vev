@@ -1,15 +1,15 @@
 # vev
 
-\<e>
+\<e> | inspired by [koa](https://github.com/koajs/koa) [axios](https://github.com/axios/axios) [redaxios](https://github.com/developit/redaxios)
 
-inspired by [koa](https://github.com/koajs/koa) [axios](https://github.com/axios/axios) [redaxios](https://github.com/developit/redaxios)
+---
 
 ## start
 
 ```html
 <html>
   <head>
-    <script scr="./vev.min.js" type="module" />
+    <script scr="./vev.js" type="module" />
   </head>
   <body>
     <script type="module">
@@ -23,12 +23,18 @@ inspired by [koa](https://github.com/koajs/koa) [axios](https://github.com/axios
 ## usage
 
 ```js
-// import { vev } form './lib/vev.js'
+// import { vev } form 'vev'
+// const { vev } = require('vev/dist/index.common.js')
+
 vev.get('/user')
 vev.get('/user?id=3')
 vev.get('/user', { params: { id: 3 } })
 
+// POST /user body: {"id":3,"name":foo }
 vev.post('/user', { id: 3, name: 'foo' })
+
+//  POST /user body: id=3&name=foo
+vev.post('/user', { id: 3, name: 'foo' }, { requestType: 'formData' })
 
 vev.put(
   '/user',
@@ -39,14 +45,24 @@ vev.put(
   }
 )
 
-vevUser = vev.mapConfig({ baseUrl: '/user' })
-vevUser.get('/post', { params: { id: 1 } }) // GET /user/post?id=1
+vev.requset({
+  method: 'post',
+  body: { name: 'name', id: '1' },
+})
+
+const vevUser = vev.mapConfig({ baseUrl: '/user', params: { pageNum: 1 } })
+vevUser.get('/post', { params: { id: 1 } }) // GET /user/post?id=1&pageNum=1
+
+const vevNewUser = vevUser.mapConfig({ baseUrl: '/newUser', params: { pageNum: 0 } })
+vevNewUser.requset({ parmas: { id: 2 } }) // GET /newUser?id=2&params=0
 
 // import fetch as fetchpolyfill from 'node-fetch'
 import { fetch as fetchPolyfill } from 'whatwg-fetch'
 
 const vevPolyfill = vev.mapConfig({ fetch: fetchPolyfill })
 vevPolufill.get('/post')
+
+const vevPolyfillNewUSer = vevPolyfill.map(...vevNewUser.middleware())
 ```
 
 ---
@@ -60,7 +76,7 @@ interface VevConf extends RequestInit {
   // RequestInit
   method?: httpMethod
   headers?: RequestInit['headers']
-  body?: RequestInit['body'] | any // add any
+  body?: RequestInit['body'] | plainObject // add plainObject
   mode?: 'cors' | 'no-cors' | 'same-origin' | 'navigate'
   credentials?: 'omit' | 'same-origin' | 'include'
   cache?: boolean
@@ -71,14 +87,14 @@ interface VevConf extends RequestInit {
   signal?: AbortSignal
   referrerPolicy?: ReferrerPolicy
 
-  // vevConfig
-  url: string
+  // config
+  url?: string
   baseUrl?: string
-  params?: any
+  params?: string | Record<string, any> | URLSearchParams
 
   fetch?: Window['fetch']
-  responseType?: 'json' | 'arrayBuffer' | 'blob' | 'formData' | 'text' | 'row' //default json
-  requsetType?: 'json' | 'formData' // default json
+  responseType?: 'json' | 'arrayBuffer' | 'blob' | 'formData' | 'text' | 'row' // add row, default json
+  requestType?: 'json' | 'formData' // default json, autoset headers['Conent-Type']
   timeout?: number
 }
 ```
@@ -86,35 +102,38 @@ interface VevConf extends RequestInit {
 ### vev
 
 ```ts
-type transType<T> = (t: T) => T | Promise<T>
-type withBody = (url: string, body: any, conf: vevConfig) => Promise<Response | any>
-type withoutBody = (url: string, conf: vevConfig) => Promise<Response | any>
+type middleware = (conf: VevConf | undefined, next) => Promise<any>
+type middlewareConf = (conf: VevConf) => VevConf | Promise<VevConf>
+type middlewareRes = (err: null | any, res?: any) => Promise<any>
 
-type vev = {
+type resWithBody = {
+  response: Response
+  status: Response['status']
+  headers: Response['headers']
+  body: Response['body'] | any
+}
+
+export type Vev<R = resWithBody> = {
   middleware: () => middleware[]
 
-  version: () => string | '0.1.0'
+  version: () => string
 
   // configuration
-  map: (...mid: middleware[]) => vev
-  mapConfig: (fn: (conf: vevConfig) => vevConfig) => vev
-  mapRes: (fn: (res: Response) => any) => vev
-
-  headers: (h: headers | transType<headers>) => vev
-  params: (p: params | transType<params>) => vev
-  body: (b: body | transType<body>) => vev
+  map: <T = R>(...mid: middleware[]) => Vev<T>
+  mapConfig: <T = R>(mid: VevConf | middlewareConf) => Vev<T>
+  mapResponse: <T = R>(mid: middlewareRes) => Vev<T>
 
   // request
-  request: (conf: vevConfig) => Promise<Response | any>
+  request: (config?: VevConf) => Promise<R>
 
-  get: withoutBody
-  head: withoutBody
+  get: <T = R>(url: string, config?: VevConf) => Promise<T>
+  // head: ...
 
-  delete: withBody
-  options: withBody
-  post: withBody
-  put: withBody
-  patch: withBody
+  post: <T = R, B>(url: string, body?: B, config?: VevConf) => Promise<T>
+  // options: ...
+  // delete: ...
+  // put: ...
+  // patch: ...
 }
 ```
 
@@ -127,7 +146,7 @@ type vev = {
 ```js
 const withLoding = (config, next) => {
   const cancel = startLoading()
-  return next(config).finally(cancel)
+  return next(config).finally(() => cancel())
 }
 
 const vevWithLoding = vev.map(withLoding)
@@ -136,34 +155,36 @@ const vevWithLoding = vev.map(withLoding)
 - withToken
 
 ```js
-const vevWithToken = vev.headers({ authToken: getToken() })
+const vevWithToken = vev.mapConfig({ headers: { authToken: getToken() } })
 
 //  async
-const vevWithToken = vev.headers(async (headers) => {
+const withToken = async (config) => {
   const token = await getToken()
-  return Object.assgin({ token }, headers)
-})
+  config.headers = Object.assgin({}, config.headers, { token })
+  return config
+}
+
+const vevWithToken = vev.mapConfig(withToken)
+```
+
+- gotoLogin
+
+```js
+const gotoLogin = (err, res) => {
+  if (!err) return res
+  return err?.status === 401 ? gotoLogin() : Promise.reject(err)
+}
+
+const vevToLogin = vev.mapResponse(gotoLogin)
 ```
 
 - withAuth
 
 ```js
-const withAuth = (config, next) => {
-  return next(config).catch((errResponse) => {
-    return errResponse?.status === 401 ? gotoLogin() : Promise.reject(errPesPonse)
-  })
-}
-
-const vevWithAuth = vev.map(withAuth)
-```
-
-- withLogin
-
-```js
 // compose
-const vevWithLogin = vev.map(withLoading, withAuth, ...vevWithToken.middleware())
-const vevWithLogin = vevWithToken.map(withLoading).map(withAuth)
-const vevWithLogin = vevWithAuth.map(withLoading).map(...vevWithToken.middleware())
+const vevWithAuth = vev.map(withLoading).mapConfig(withToken).mapResponse(gotoLogin)
+
+const vevWithAuth = vevWithToken.map(withLoading).mapResponse(gotoLogin)
 ```
 
 ---
@@ -171,10 +192,15 @@ const vevWithLogin = vevWithAuth.map(withLoading).map(...vevWithToken.middleware
 ## build
 
 ```bash
-npx exbuild --bundle ./src/index.ts --target=es6 --sourcemap --minify --outfile=./dist/index.js
+esbuild --bundle ./src/index.ts --target=es6 --minify --format=esm --outfile=./dist/index.js
+esbuild --bundle ./src/index.ts --target=es6 --minify --format=cjs --outfile=./dist/index.common.js
+
+# test
+Deno test ./test.ts
+
 ```
 
 ### about vev
 
-Fetch just like a shuttle, switch between client and server.
-vev in Norwegian mean loom and it's sort and cute :p \<e>
+Fetch just like a shuttle, switch between client and server.  
+vev in Norwegian means loom, it's sort and cute :p
