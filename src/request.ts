@@ -1,7 +1,7 @@
 import { pick, isPlainObject, pReject, isFn, pResolve, merge } from './utils.ts'
 import { VevConf } from './index.ts'
 import { composeVev } from './middleware.ts'
-import { vevError } from './errorCode.ts'
+import { vevAssert } from './errorCode.ts'
 
 const getParams = (params?: any) => {
   return new URLSearchParams(params).toString()
@@ -32,16 +32,16 @@ const getBody = (config: VevConf, [isPlainObject, isFormData]: boolean[]): VevCo
 
 const getHeaders = (
   config: VevConf,
-  [isPlainObject, isFormData]: boolean[]
+  [isPlainObject, isFormData, isBodyString]: boolean[]
 ): VevConf['headers'] => {
   const { headers } = config
 
   const jsonType = 'application/json;charset=utf-8'
   const formType = 'application/x-www-form-urlencoded;charset=utf-8'
 
-  return !isPlainObject
-    ? headers
-    : merge({ 'Content-Type': isFormData ? formType : jsonType }, headers)
+  return isPlainObject || isBodyString
+    ? merge({ 'Content-Type': isFormData ? formType : jsonType }, headers)
+    : headers
 }
 
 const getSignal = (config: VevConf): AbortSignal | void => {
@@ -65,7 +65,11 @@ const getSignal = (config: VevConf): AbortSignal | void => {
 }
 
 const getConfig = (config: VevConf): RequestInit => {
-  const computed = [isPlainObject(config.body), config.requestType === 'formData']
+  const computed = [
+    isPlainObject(config.body),
+    config.requestType === 'formData',
+    typeof config.body === 'string',
+  ]
 
   const body = getBody(config, computed)
   const headers = getHeaders(config, computed)
@@ -77,19 +81,30 @@ const getConfig = (config: VevConf): RequestInit => {
 
   return merge(fetchConf, signal && { signal }, body && { body }, headers && { headers })
 }
+type resWithBody = {
+  response: Response
+  status: Response['status']
+  headers: Response['headers']
+  body: Response['body'] | any
+}
 
 export const request: ReturnType<composeVev> = (config = {} as VevConf) => {
   const fetchUrl = getUrl(config)
   const fetchInit = getConfig(config)
   const vFetch: typeof fetch = config.fetch || fetch || window.fetch
 
-  if (!vFetch) throw vevError(3)
+  vevAssert(!!vFetch, 3)
 
-  return vFetch(fetchUrl, fetchInit).then((fetchRes: Response) => {
+  return vFetch(fetchUrl, fetchInit).then((response: Response) => {
     const resType = (config.responseType as Exclude<VevConf['responseType'], 'row'>) || 'json'
 
-    const withFormat = isFn(fetchRes[resType]) ? fetchRes[resType]() : fetchRes
+    const resBody = isFn(response[resType]) ? response[resType]() : response.body
 
-    return fetchRes.ok ? withFormat : pResolve(withFormat).then(pReject)
+    return pResolve(resBody).then((body) => {
+      const { status, headers } = response
+      const resWithBody: resWithBody = { status, headers, body, response }
+
+      return response.ok ? pResolve(resWithBody) : pReject(resWithBody)
+    }) as Promise<resWithBody>
   })
 }
