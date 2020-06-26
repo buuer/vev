@@ -46,8 +46,8 @@ const getHeaders = (
 
 const getSignal = (config: VevConf): AbortSignal | void => {
   const { timeout, signal } = config
-  if (!timeout || timeout <= 0) return
   if (signal && signal.aborted) return signal
+  if (!timeout || timeout <= 0) return
 
   const timeoutCtrl = new AbortController()
 
@@ -81,7 +81,8 @@ const getConfig = (config: VevConf): RequestInit => {
 
   return merge(fetchConf, signal && { signal }, body && { body }, headers && { headers })
 }
-type resWithBody = {
+
+export type resWithBody = {
   response: Response
   status: Response['status']
   headers: Response['headers']
