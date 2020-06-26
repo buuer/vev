@@ -1,57 +1,48 @@
-import {
-  isFn,
-  memoryCall,
-  callFn,
-  deepMerge,
-  merge,
-  pResolve,
-  objectCreate,
-  concat,
-} from './utils.ts'
+//prettier-ignore
+import { isFn, memoryCall, deepMerge, merge, pResolve, objectCreate, concat } from './utils.ts'
 
-import {
-  middleware,
-  composeVev,
-  middlewareConf,
-  middlewareRes,
-  middlewareCheck,
-} from './middleware.ts'
+import { middleware, composeVev, middlewareCheck } from './middleware.ts'
+
 import { request, resWithBody } from './request.ts'
 import { vevAssert } from './errorCode.ts'
 
 //prettier-ignore
 type httpMethod = | 'get' | 'delete' | 'options' | 'connect' | 'head' | 'post' | 'put' | 'patch'
 
+// prettier-ignore
+type vevRequestWithBody<R = resWithBody, B = VevConf['body']> = ( this: Vev, url: string, body?: B, config?: VevConf) => Promise<R>
 //prettier-ignore
-type vevRequestWithBody = <T,B>(this:Vev, url: string, body?: B | VevConf['body'], config?: VevConf) => Promise<T>
-type vevRequestWithoutBody = <T>(this: Vev, url: string, config?: VevConf) => Promise<T>
-type vevRequest = <T>(this: Vev, config?: VevConf) => Promise<resWithBody & T>
+type vevRequestWithoutBody<R = resWithBody> = (this: Vev, url: string, config?: VevConf) => Promise<R>
+type vevRequest<R = resWithBody> = (this: Vev<R>, config?: VevConf) => Promise<R>
 
-type vevMap = (this: Vev, ...mid: middleware[]) => Vev
-type vevMapConfig = (this: Vev, mid: middlewareConf) => Vev
-type vevMapRes = (this: Vev, mid: middlewareRes) => Vev
+type middlewareConf = (c: VevConf) => VevConf | Promise<VevConf>
+type middlewareRes = (err: any, res?: any) => Promise<any>
 
-export type Vev = {
+type vevMap<R> = <K = R>(this: Vev<R>, ...mid: middleware[]) => Vev<K>
+type vevMapConfig<R> = <K = R>(this: Vev<R>, mid: VevConf | middlewareConf) => Vev<K>
+type vevMapRes<R> = <K = R>(this: Vev<R>, mid: middlewareRes) => Vev<K>
+
+export type Vev<R = resWithBody> = {
   middleware: () => middleware[]
 
   version: () => string
 
   // configuration
-  map: vevMap
-  mapConfig: vevMapConfig
-  mapResponse: vevMapRes
+  map: vevMap<R>
+  mapConfig: vevMapConfig<R>
+  mapResponse: vevMapRes<R>
 
   // request
-  request: vevRequest
+  request: vevRequest<R>
 
-  get: vevRequestWithoutBody
-  head: vevRequestWithoutBody
+  get: vevRequestWithoutBody<R>
+  head: vevRequestWithoutBody<R>
 
-  delete: vevRequestWithBody
-  options: vevRequestWithBody
-  post: vevRequestWithBody
-  put: vevRequestWithBody
-  patch: vevRequestWithBody
+  delete: vevRequestWithBody<R>
+  options: vevRequestWithBody<R>
+  post: vevRequestWithBody<R>
+  put: vevRequestWithBody<R>
+  patch: vevRequestWithBody<R>
 }
 
 export interface VevConf extends Omit<RequestInit, 'body'> {
@@ -69,15 +60,6 @@ export interface VevConf extends Omit<RequestInit, 'body'> {
 }
 
 const proto = (function createProto() {
-  type configToMid = (config: middlewareConf) => middleware
-  type resToMid = (rf: middlewareRes) => middleware
-
-  const configToMid: configToMid = (config) => (conf, next) =>
-    pResolve(isFn(config) ? callFn(config, conf) : deepMerge(config, conf)).then(next)
-
-  const resToMid: resToMid = (resFormat) => (conf, next) =>
-    next(conf).then(resFormat.bind(null, null), resFormat)
-
   const createMethod = (method: httpMethod): vevRequestWithoutBody =>
     function (url, config) {
       return this.request(merge({}, config, { url, method }))
@@ -100,16 +82,28 @@ const proto = (function createProto() {
       },
 
       mapConfig: function (config) {
-        return this.map(configToMid(config))
+        const midList = this.middleware()
+        const configIsFn = isFn(config)
+
+        const configMid: middleware = (conf, next) =>
+          pResolve(configIsFn ? (config as any)(conf) : deepMerge(config, conf)).then(next)
+
+        const newList = configIsFn ? concat(midList, configMid) : concat(configMid, midList)
+
+        return CreateVev(newList)
       },
 
       mapResponse: function (resFormat) {
         vevAssert(isFn(resFormat), 4)
-        return this.map(resToMid(resFormat))
+
+        const resMid: middleware = (conf, next) =>
+          next(conf).then(resFormat.bind(null, null), resFormat)
+
+        return this.map(resMid)
       },
 
       // request
-      request: function (config) {
+      request: function (config = {}) {
         const composetMid = () => composeVev(this.middleware())
         const memoryMid = memoryCall(this, composetMid)
 

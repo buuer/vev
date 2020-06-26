@@ -2,15 +2,11 @@ import { VevConf } from './index.ts'
 import { tap, pReject, pResolve, isFn, isUndefined } from './utils.ts'
 import { vevAssert } from './errorCode.ts'
 
-export type middleware = <T>(c: VevConf | undefined, next: next) => Promise<T>
-export type middlewareConf = Partial<VevConf> | ((c: VevConf) => VevConf | Promise<VevConf>)
-export type middlewareRes = (c: any) => Promise<any>
+type next = (c: any) => Promise<any>
 
-type next = (...c: any[]) => Promise<any>
+export type middleware = <T>(c: VevConf | undefined, next: next) => Promise<T>
 
 export type composeVev = (mid: middleware[]) => (c?: VevConf, next?: next) => Promise<any>
-
-type dispatch = (idx: number, arg: any) => Promise<any>
 
 export const middlewareCheck = (midList: middleware[]) =>
   vevAssert(!midList.length || midList.every(isFn), 0)
@@ -21,7 +17,7 @@ export const composeVev: composeVev = (mid) => {
   return (config, finalCall) => {
     let callIndex = -1
 
-    const dispatch: dispatch = (idx, arg) => {
+    const dispatch = (idx: number, arg: any): Promise<any> => {
       vevAssert(!isUndefined(arg), 1)
 
       const fn = idx === mid.length ? finalCall : mid[idx]
