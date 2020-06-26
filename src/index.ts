@@ -16,7 +16,7 @@ import {
   middlewareRes,
   middlewareCheck,
 } from './middleware.ts'
-import { request } from './request.ts'
+import { request, resWithBody } from './request.ts'
 import { vevAssert } from './errorCode.ts'
 
 //prettier-ignore
@@ -25,7 +25,7 @@ type httpMethod = | 'get' | 'delete' | 'options' | 'connect' | 'head' | 'post' |
 //prettier-ignore
 type vevRequestWithBody = <T,B>(this:Vev, url: string, body?: B | VevConf['body'], config?: VevConf) => Promise<T>
 type vevRequestWithoutBody = <T>(this: Vev, url: string, config?: VevConf) => Promise<T>
-type vevRequest = <T>(this: Vev, config?: VevConf) => Promise<T>
+type vevRequest = <T>(this: Vev, config?: VevConf) => Promise<resWithBody & T>
 
 type vevMap = (this: Vev, ...mid: middleware[]) => Vev
 type vevMapConfig = (this: Vev, mid: middlewareConf) => Vev
@@ -39,7 +39,7 @@ export type Vev = {
   // configuration
   map: vevMap
   mapConfig: vevMapConfig
-  mapRes: vevMapRes
+  mapResponse: vevMapRes
 
   // request
   request: vevRequest
@@ -73,7 +73,7 @@ const proto = (function createProto() {
   type resToMid = (rf: middlewareRes) => middleware
 
   const configToMid: configToMid = (config) => (conf, next) =>
-    pResolve(isFn(config) ? callFn(config, conf) : deepMerge(conf, config)).then(next)
+    pResolve(isFn(config) ? callFn(config, conf) : deepMerge(config, conf)).then(next)
 
   const resToMid: resToMid = (resFormat) => (conf, next) =>
     next(conf).then(resFormat.bind(null, null), resFormat)
@@ -103,7 +103,7 @@ const proto = (function createProto() {
         return this.map(configToMid(config))
       },
 
-      mapRes: function (resFormat) {
+      mapResponse: function (resFormat) {
         vevAssert(isFn(resFormat), 4)
         return this.map(resToMid(resFormat))
       },
